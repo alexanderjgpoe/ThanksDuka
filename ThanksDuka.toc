@@ -1,0 +1,7 @@
+## Interface: 110007
+## Title: Thanks Duka
+## Notes: A simple Loot Council system for Catastrophe.
+## Author: Xerun
+## Version: 0.01
+
+ThanksDuka.lua
