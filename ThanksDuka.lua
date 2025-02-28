@@ -91,7 +91,13 @@ local function UpdateTimerBar(timeRemaining)
 end
 
 local function EndRoll()
+    if rollTimer then
+        rollTimer:Cancel()
+        rollTimer = nil
+    end
+
     if #lootItems == 0 then return end
+    --local item = table.remove(lootItems, 1)
     local item = lootItems[1]
     local chatType = IsInRaid() and "RAID" or "SAY"
     local highestRoll, winner = 0, nil
@@ -119,10 +125,17 @@ end
 
 local function AnnounceRoll(rollType)
     return function()
+        if not addonEnabled then return end
+        if rollTimer then
+            print("A roll is already in progress. Please wait for it to finish.")
+            return
+        end
+
         if #lootItems == 0 then return end
         local item = lootItems[1]
         local chatType = IsInRaid() and "RAID" or "SAY"
         SendChatMessage(rollType .. " roll for " .. item.link .. "! You have 60 seconds.", chatType)
+
         rolls = {}
         rollTimer = C_Timer.NewTicker(1, function()
             local remaining = timerBar:GetValue() - 1
@@ -132,6 +145,7 @@ local function AnnounceRoll(rollType)
                 UpdateTimerBar(remaining)
             end
         end, 60)
+
         timerBar:SetMinMaxValues(0, 60)
         timerBar:SetValue(60)
     end
