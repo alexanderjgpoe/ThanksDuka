@@ -1,193 +1,245 @@
-ThanksDuka = {}
+-- ThanksDuka WoW Loot Council Addon
+local frame = CreateFrame("Frame", "ThanksDukaFrame", UIParent, "BasicFrameTemplateWithInset")
+frame:SetSize(380, 500)
+frame:SetPoint("CENTER")
+frame:Hide()
 
--- Create a frame to capture events
-ThanksDuka.frame = CreateFrame("Frame");
+local addonEnabled = true
 
---List of players and loot items.
-ThanksDuka.players = {}
-ThanksDuka.lootItems = {}
+frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
+frame.title:SetText("Thanks Duka - Loot Council")
 
---Table to hold who gets which item
-ThanksDuka.lootDistribution = {}
+local lootItems = {}
+local rolls = {}
+local rollTimer
+local timerBar
 
--- Register events to track drops
-ThanksDuka.frame:RegisterEvent("CHAT_MSG_LOOT");
-ThanksDuka.frame:RegisterEvent("PLAYER_ENTERING_WORLD");
+-- Create scrollable loot list
+local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+scrollFrame:SetSize(320, 380)
+scrollFrame:SetPoint("TOP", frame, "TOP", 0, -30)
 
-ThanksDuka.frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "CHAT_MSG_LOOT" then
-        ThanksDuka:HandleLootEvent(...);
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        ThanksDuka:ResetLootDistribution();
+local scrollChild = CreateFrame("Frame")
+scrollChild:SetSize(320, 1) -- Will expand dynamically
+scrollChild:SetPoint("TOP", frame, "TOP")
+scrollFrame:SetScrollChild(scrollChild)
+
+local function UpdateLootPositions()
+    for i, item in ipairs(lootItems) do
+        item.frame:ClearAllPoints()
+        item.frame:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, -((i - 1) * 50))
     end
-end)
-
--- Handle loot events
-function ThanksDuka:HandleLootEvent(message)
-    local itemLink = message:match("You receive loot: (|c.+|r)") -- Captures the item link
-    local playerName = UnitName("player");
-
-    if itemLink then
-        -- Store the loot and who won it
-        table.insert(ThanksDuka.lootItems, {itemLink = intemLink, player = playerName});
-        -- Needs some logic?
-
-        ThanksDuka:ShowRollUI(itemLink); -- Make a popup box for looted item with button to roll on the item
-    end
+    scrollChild:SetHeight(#lootItems * 50)
 end
 
--- Function to distribute loot(maybe?)
-
-
---Reset loot distribution when entering the world
-function ThanksDuka:ResetLootDistribution()
-    ThanksDuka.lootDistribution = {}
-    ThanksDuka.lootItems = {}
+local function RemoveLootItem(index)
+    lootItems[index].frame:Hide()
+    table.remove(lootItems, index)
+    UpdateLootPositions()
+    if #lootItems == 0 then frame:Hide() end
 end
 
--- Main addon frame
-local ThanksDukaFrame = CreateFrame("Frame", "ThanksDukaFrame", UIParent, "BasicFrameTemplateWithInset")
-ThanksDukaFrame:SetSize(400, 300);
-ThanksDukaFrame:SetPoint("CENTER");
+local function AddLootItem(itemLink)
+    local itemName, _, _, _, _, _, _, _, _, itemIcon = GetItemInfo(itemLink)
+    
+    if not itemIcon then return end 
+    
+    local itemFrame = CreateFrame("Frame", nil, frame)
+    itemFrame:SetSize(360, 40)
+    
+    local texture = itemFrame:CreateTexture(nil, "BACKGROUND")
+    texture:SetSize(40, 40)
+    texture:SetPoint("LEFT", itemFrame, "LEFT")
+    texture:SetTexture(itemIcon)
+    
+    local itemText = itemFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    itemText:SetPoint("LEFT", texture, "RIGHT", 15, 0)
+    itemText:SetText(itemLink)
 
--- Child frames and regions
-ThanksDukaFrame.title = ThanksDukaFrame:CreateFontString(nil, "OVERLAY");
-ThanksDukaFrame.title:SetFontObject("GameFontHighlight");
-ThanksDukaFrame.title:SetPoint("LEFT", ThanksDukaFrame.TitleBg, "LEFT", 5, 0);
-ThanksDukaFrame.title:SetText("Thanks Duka Options");
+    itemFrame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(itemFrame, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(itemLink)
+        GameTooltip:Show()
+    end)
+    itemFrame:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    
+    -- Remove button next to each item.
+    local removeButton = CreateFrame("Button", nil, itemFrame, "GameMenuButtonTemplate")
+    removeButton:SetSize(60, 25)
+    removeButton:SetPoint("RIGHT", itemFrame, "RIGHT", -40, 0)
+    removeButton:SetText("Remove")
+    removeButton:SetScript("OnClick", function()
+        for i, item in ipairs(lootItems) do
+            if item.frame == itemFrame then
+                RemoveLootItem(i)
+                break
+            end
+        end
+    end)
+    
+    table.insert(lootItems, { frame = itemFrame, link = itemLink })
+    itemFrame:SetParent(scrollChild)
+    UpdateLootPositions()
+    frame:Show()
+end
 
-ThanksDukaFrame:SetMovable(true);
-ThanksDukaFrame:EnableMouse(true);
-ThanksDukaFrame:RegisterForDrag("LeftButton");
-ThanksDukaFrame:SetScript("OnDragStart", ThanksDukaFrame.StartMoving);
-ThanksDukaFrame:SetScript("OnDragStop", ThanksDukaFrame.StopMovingOrSizing);
+local function UpdateTimerBar(timeRemaining)
+    timerBar:SetValue(timeRemaining)
+end
 
--- Button
--- Dummy Button for now
-ThanksDukaFrame.saveButton = CreateFrame("Button", nil, ThanksDukaFrame, "GameMenuButtonTemplate");
-ThanksDukaFrame.saveButton:SetPoint("CENTER", ThanksDukaFrame, "TOP", 0, -70);
-ThanksDukaFrame.saveButton:SetSize(140, 40);
-ThanksDukaFrame.saveButton:SetText("Save"); -- Dummy button text. Change later.
-ThanksDukaFrame.saveButton:SetNormalFontObject("GameFontNormalLarge"); -- Font for button from Blizzard api
-ThanksDukaFrame.saveButton:SetHighlightFontObject("GameFontHighlightLarge"); -- Highlight for mouseover of button from Blizzard api
-
--- Start hidden
-ThanksDukaFrame:Hide();
-
--- Toggle Function
-local function ToggleThanksDuka()
-    if ThanksDukaFrame:IsShown() then
-        ThanksDukaFrame:Hide()
+local function EndRoll()
+    if #lootItems == 0 then return end
+    local item = lootItems[1]
+    local chatType = IsInRaid() and "RAID" or "SAY"
+    local highestRoll, winner = 0, nil
+    
+    for player, roll in pairs(rolls) do
+        if roll > highestRoll then
+            highestRoll = roll
+            winner = player
+        end
+    end
+    
+    if winner then
+        SendChatMessage("Winner: " .. winner .. " with a roll of " .. highestRoll, chatType)
+        RemoveLootItem(1)
     else
-        ThanksDukaFrame:Show()
+        SendChatMessage("No valid rolls received.", chatType)
+    end
+    
+    if rollTimer then
+        rollTimer:Cancel()
+        rollTimer = nil
+    end
+    timerBar:SetValue(0)
+end
+
+local function AnnounceRoll(rollType)
+    return function()
+        if #lootItems == 0 then return end
+        local item = lootItems[1]
+        local chatType = IsInRaid() and "RAID" or "SAY"
+        SendChatMessage(rollType .. " roll for " .. item.link .. "! You have 60 seconds.", chatType)
+        rolls = {}
+        rollTimer = C_Timer.NewTicker(1, function()
+            local remaining = timerBar:GetValue() - 1
+            if remaining <= 0 then
+                EndRoll()
+            else
+                UpdateTimerBar(remaining)
+            end
+        end, 60)
+        timerBar:SetMinMaxValues(0, 60)
+        timerBar:SetValue(60)
     end
 end
 
-SLASH_THANKSDUKA1 = "/THANKSDUKA" -- Change to something shorter
-SlashCmdList["THANKSDUKA"] = ToggleThanksDuka;
-
---------------------------------------------------------------------
--- Roll UI and roll timer functionality
---------------------------------------------------------------------
-
---Create and display roll UI for an item.
-function ThanksDuka:ShowRollUI(itemLink)
-    if not self.rollFrame then
-        self.rollFrame = CreateFrame("Frame", "ThanksDukaRollFrame", UIParent, "BasicFrameTemplateWithInset")
-        self.rollFrame:SetSize(300, 150)
-        self.rollFrame:SetPoint("CENTER")
-
-        self.rollFrame.title = self.rollFrame:CreateFontString(nil, "OVERLAY") 
-        self.rollFrame.title:SetFontObject("GameFontHighlight")
-        self.rollFrame.title:SetPoint("TOP", self.rollFrame, "TOP", 0, -10)
-        self.rollFrame.title:SetText("Roll for Item")
-
-        self.rollFrame.itemText = self.rollFrame:CreateFontString(nil, "OVERLAY")
-        self.rollFrame.itemText:SetFontObject("GameFontNormal")
-        self.rollFrame.itemText:SetPoint("TOP", self.rollFrame, "TOP", 0, -40)
-
-        -- Button to start a roll. Need five or six buttons.
-        self.rollFrame.rollButton = CreateFrame("Button", nil, self.rollFrame, "GameMenuButtonTemplate")
-        self.rollFrame.rollButton:SetPoint("BOTTOM", self.rollFrame, "BOTTOM", 0, 20)
-        self.rollFrame.rollButton:SetSize(140, 40)
-        self.rollFrame.rollButton:SetText("Start Roll")
-        self.rollFrame.rollButton:SetNormalFontObject("GameFontNormalLarge")
-        self.rollFrame.rollButton:SetHighlightFontObject("GameFontHighlightLarge")
-    end
-
-    -- Update the displayed item and show the UI.
-    self.rollFrame.itemText:SetText(itemLink)
-    self.rollFrame:Show()
-
-    -- Start roll session on button click
-    self.rollFrame.rollButton:SetScript("OnClick", function()
-        ThanksDuka:StartRollSession(itemLink)
-    end)
+local function CreateRollButton(text, offsetX, offsetY, onClickFunction)
+    local button = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+    button:SetSize(80, 30)
+    button:SetPoint("BOTTOM", frame, "BOTTOM", offsetX, offsetY)
+    button:SetText(text)
+    button:SetScript("OnClick", onClickFunction)
+    return button
 end
 
--- Called on button press
-function ThanksDuka:StartRollSession(itemLink)
-    local warningMessage = "Tou have one minute to roll on " .. itemLink .. "."
-    SendChatMessage(warningMessage, "RAID_WARNING") -- Is this how raid warnings are called? Check later.
-    print(warningMessage)
+local twoSetButton = CreateRollButton("2 set", -120, 50, AnnounceRoll("2 set"))
+local fourSetButton = CreateRollButton("4 set", -40, 50, AnnounceRoll("4 set"))
+local msButton = CreateRollButton("MS", 40, 50, AnnounceRoll("MS"))
+local osButton = CreateRollButton("OS", 120, 50, AnnounceRoll("OS"))
+local xmogButton = CreateRollButton("XMog", -40, 10, AnnounceRoll("XMog"))
 
-    -- Table for current roll session.
-    self.currentRollSession = {
-        itemLink = itemLink,
-        highestRoll = 0,
-        winner = nil,
-    }
+local endRollButton = CreateRollButton("End Roll", 40, 10, EndRoll)
 
-    -- Listening for rolls
-    self.frame:RegisterEvent("CHAT_MSG_SYSTEM")
 
-    -- 60 second timer for rolls
-    -- Make user defined later
-    C_Timer.After(60, function()
-        ThanksDuka:EndRollSession()
-    end)
-end
-
--- Handle incoming system messages for roll results
-function ThanksDuka:HandleRollMessage(message)
-    -- Normal /roll command, addon is expecting "PlayerName rolls [x] (1-100)"
-    local playerName, roll = message:match("^(%S+) rolls (%d+)")
-    if playerName and roll then
-        roll = tonumber(roll)
-        if roll > self.currentRollSession.highestRoll then
-            self.currentRollSession.highestRoll = roll
-            self.currentRollSession.winner = playerName
-        end
+local function ProcessRoll(player, roll)
+    if not rolls[player] then
+        rolls[player] = roll
     end
 end
 
-function ThanksDuka:EndRollSession()
-    self.frame:UnredisterEvent("CHAT_MSG_SYSTEM")
-    if self.currentRollSession then
-        local winner = self.currentRollSession.winner or "No one"
-        local resultMessage = "Roll session ended for " .. self.currentRollSession.itemLink ..
-                                ". Winner: " .. winner .. " with roll " ..self.currentRollSession.highestRoll .. "."
-        SendChatMessage(resultMessage, "RAIN_WARNING")
-        print(resultMessage)
-        self.currentRollSession = nil
-        if self.rollFrame then
-            self.rollFrame:Hide()
-        end
+--[[
+local startRollButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+startRollButton:SetSize(120, 30)
+startRollButton:SetPoint("BOTTOM", frame, "BOTTOM", -70, 10)
+startRollButton:SetText("Start Roll")
+startRollButton:SetScript("OnClick", AnnounceRoll)
+--]]
+
+--[[
+local endRollButton = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
+endRollButton:SetSize(120, 30)
+endRollButton:SetPoint("BOTTOM", frame, "BOTTOM", 70, 10)
+endRollButton:SetText("End Roll")
+endRollButton:SetScript("OnClick", EndRoll)
+--]]
+
+-- Timer Bar
+timerBar = CreateFrame("StatusBar", nil, frame)
+timerBar:SetSize(320, 15)
+timerBar:SetPoint("TOPLEFT", twoSetButton, "TOPLEFT", 0, 20)
+timerBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+timerBar:SetStatusBarColor(0, 0.7, 1, 0.8)
+timerBar:SetMinMaxValues(0, 60)
+timerBar:SetValue(0)
+
+local function ToggleAddon()
+    addonEnabled = not addonEnabled
+    if not addonEnabled then
+        frame:Hide()
+        print("ThanksDuka is now |cffff0000disabled|r.")
+    else
+        print("ThanksDuka is now |cff00ff00enabled|r.")
     end
 end
 
--- Extending Main Event Handler
-local original_OnEvent = ThanksDuka.frame:GetScript("OnEvent")
-ThanksDuka.frame:SetScript("OnEvent", function(self, event, ...)
+local function ToggleFrame()
+    if not addonEnabled then
+        print("ThanksDuka is currently disabled. Use '/thanksduka enable' to enable it.")
+        return
+    end
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        frame:Show()
+    end
+end
+
+SLASH_THANKSDUKA1 = "/thanksduka"
+SlashCmdList["THANKSDUKA"] = function(msg)
+    if msg == "enable" then
+        addonEnabled = true
+        print("ThanksDuka is now |cff00ff00enabled|r.")
+    elseif msg == "disable" then
+        addonEnabled = false
+        frame:Hide()
+        print("ThanksDuka is now |cffff0000disabled|r.")
+    elseif msg == "toggle" then
+        ToggleFrame()
+    else
+        print("Usage: /thanksduka [enable  |  disable  |  toggle]")
+    end
+end
+
+frame:RegisterForDrag("LeftButton")
+frame:SetMovable(true)
+frame:EnableMouse(true)
+frame:SetScript("OnDragStart", frame.StartMoving)
+frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+
+frame:RegisterEvent("CHAT_MSG_LOOT")
+frame:RegisterEvent("CHAT_MSG_SYSTEM")
+frame:SetScript("OnEvent", function(self, event, msg, sender)
+    if not addonEnabled then return end
+
     if event == "CHAT_MSG_LOOT" then
-        ThanksDuka:HandleLootEvent(...)
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        ThanksDuka:ResetLootDistribution()
-    elseif event == "CHAT_MSG_SYSTEM" and ThanksDuka.currentRollSession then
-        local message = ...
-        ThanksDuka:HandleRollMessage(message)
-    end
-    if original_OnEvent then 
-        original_OnEvent(self, event, ...)
+        local itemLink = msg:match("|c.-|Hitem:.-|h|r")
+        if itemLink then AddLootItem(itemLink) end
+    elseif event == "CHAT_MSG_SYSTEM" then
+        local player, roll = msg:match("(%S+) rolls (%d+) %(1%-100%)")
+        if player and roll then ProcessRoll(player, tonumber(roll)) end
     end
 end)
