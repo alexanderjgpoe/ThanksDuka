@@ -367,14 +367,17 @@ frame:SetScript("OnEvent", function(self, event, msg, sender)
         rollHistory = ThanksDukaDB.rollHistory or {}
     elseif event == "CHAT_MSG_LOOT" then
         if not addonEnabled then return end
-        local itemLink = msg:match("|c.-|Hitem:.-|h|r")
-        
-        if itemLink then
-            local _, _, itemQuality = GetItemInfo(itemLink)
-            if itemQuality and itemQuality >= 3 then  -- 3 is Rare (Blue) quality
-                AddLootItem(itemLink)
+        if msg:find("You receive loot:") then  -- Only process if it's YOUR loot
+            local itemLink = msg:match("|c.-|Hitem:.-|h|r")
+            if itemLink then
+                local _, _, itemQuality = GetItemInfo(itemLink)
+                if itemQuality and itemQuality >= 3 then  -- Only track Rare+ items
+                    AddLootItem(itemLink)
+                end
             end
         end
+    
+    
     
     elseif event == "CHAT_MSG_SYSTEM" then
         if not addonEnabled then return end
