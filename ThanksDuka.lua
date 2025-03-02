@@ -368,7 +368,14 @@ frame:SetScript("OnEvent", function(self, event, msg, sender)
     elseif event == "CHAT_MSG_LOOT" then
         if not addonEnabled then return end
         local itemLink = msg:match("|c.-|Hitem:.-|h|r")
-        if itemLink then AddLootItem(itemLink) end
+        
+        if itemLink then
+            local _, _, itemQuality = GetItemInfo(itemLink)
+            if itemQuality and itemQuality >= 3 then  -- 3 is Rare (Blue) quality
+                AddLootItem(itemLink)
+            end
+        end
+    
     elseif event == "CHAT_MSG_SYSTEM" then
         if not addonEnabled then return end
         local player, roll = msg:match("(%S+) rolls (%d+) %(1%-100%)")
