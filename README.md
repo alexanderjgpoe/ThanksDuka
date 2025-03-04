@@ -1,4 +1,4 @@
 # ThanksDuka
-WoW loot council addon.
+WoW master loot addon.
 
-Loot council addon for World of Warcraft guild Catastrophe-Thrall.
+Master loot addon for World of Warcraft guild Catastrophe-Thrall.
