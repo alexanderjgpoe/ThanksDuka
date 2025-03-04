@@ -118,37 +118,6 @@ local function UpdateTimerBar(timeRemaining)
     timerBar:SetValue(timeRemaining)
 end
 
-local function AnnounceRoll(rollType)
-    return function()
-        if not addonEnabled then return end
-        if rollTimer then
-            print("A roll is already in progress. Please wait for it to finish.")
-            return
-        end
-
-        if #lootItems == 0 then return end
-        local item = lootItems[1]
-        local chatType = IsInRaid() and "RAID" or "SAY"
-
-        frame.currentRollType = rollType
-
-        SendChatMessage(rollType .. " roll for " .. item.link .. "! You have 60 seconds.", chatType)
-
-        rolls = {}
-        rollTimer = C_Timer.NewTicker(1, function()
-            local remaining = timerBar:GetValue() - 1
-            if remaining <= 0 then
-                EndRoll(rollType)
-            else
-                UpdateTimerBar(remaining)
-            end
-        end, 60)
-
-        timerBar:SetMinMaxValues(0, 60)
-        timerBar:SetValue(60)
-    end
-end
-
 local function EndRoll()
     if rollTimer then
         rollTimer:Cancel()
@@ -190,6 +159,49 @@ local function EndRoll()
     end
     timerBar:SetValue(0)
 end
+
+local function AnnounceRoll(rollType)
+    return function()
+        if not addonEnabled then return end
+        if rollTimer then
+            print("A roll is already in progress. Please wait for it to finish.")
+            return
+        end
+
+        if #lootItems == 0 then return end
+        local item = lootItems[1]
+        local chatType
+        if IsInRaid() then
+            chatType = "RAID_WARNING"
+        elseif IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+            chatType = "INSTANCE_CHAT"
+        elseif IsInGroup() then
+            chatType = "PARTY"
+        else
+            chatType = "SAY"  -- Fallback if not in a group
+        end
+
+        print("Debug: IsInRaid() =", IsInRaid(), "IsInGroup() =", IsInGroup(), "ChatType =", chatType)
+
+        frame.currentRollType = rollType
+
+        SendChatMessage(rollType .. " roll for " .. item.link .. "! You have 60 seconds.", chatType)
+
+        rolls = {}
+        rollTimer = C_Timer.NewTicker(1, function()
+            local remaining = timerBar:GetValue() - 1
+            if remaining <= 0 then
+                EndRoll(rollType)
+            else
+                UpdateTimerBar(remaining)
+            end
+        end, 60)
+
+        timerBar:SetMinMaxValues(0, 60)
+        timerBar:SetValue(60)
+    end
+end
+
 
 local function CreateRollButton(text, offsetX, offsetY, onClickFunction)
     local button = CreateFrame("Button", nil, frame, "GameMenuButtonTemplate")
