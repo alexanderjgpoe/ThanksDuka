@@ -148,6 +148,7 @@ local function EndRoll()
         ThanksDukaDB.rollHistory = rollHistory  -- Save to database
 
         SendChatMessage(winner .. " won " .. item.link .. " " .. selectedDifficulty .. " for " .. rollTypeText .. " with a roll of " .. highestRoll .. " on " .. date("%m-%d-%Y"), chatType)
+        SendChatMessage(winner .. " won " .. item.link, "WHISPER", nil, UnitName("player"))
         RemoveLootItem(1)
     else
         SendChatMessage("No valid rolls received.", chatType)
@@ -180,8 +181,6 @@ local function AnnounceRoll(rollType)
         else
             chatType = "SAY"  -- Fallback if not in a group
         end
-
-        print("Debug: IsInRaid() =", IsInRaid(), "IsInGroup() =", IsInGroup(), "ChatType =", chatType)
 
         frame.currentRollType = rollType
 
