@@ -85,7 +85,6 @@ function EndRoll()
     end
     table.sort(sortedRolls, function(a, b) return a.roll > b.roll end)
 
-    -- Distribute items fairly
     local availableItems = lootItemCounts[itemLink] or 1
     local awardedCount = 0
 
@@ -175,7 +174,7 @@ local function ClearOldHistory()
         return
     end
 
-    local today = date("%m-%d-%Y")  -- Ensure this matches your entry format
+    local today = date("%m-%d-%Y")
     local newHistory = {}
     local removedEntries = 0
 
@@ -194,7 +193,6 @@ local function ClearOldHistory()
 
     -- Update roll history and save it
     ThanksDukaDB.rollHistory = newHistory
-    --C_Timer.After(0, function() ThanksDukaDB.rollHistory = newHistory end)
 
     -- Notify user
     if removedEntries > 0 then
@@ -212,35 +210,37 @@ local function ClearOldHistory()
 end
 
 local function ClearOldAttendance()
-    if not AttendanceDB or next(AttendanceDB) == nil then
+    ThanksDukaDB.attendanceHistory = ThanksDukaDB.attendanceHistory or {}
+    AttendanceDB = ThanksDukaDB.attendanceHistory
+
+    if next(AttendanceDB) == nil then
         print("No attendance records to clear.")
         return
     end
 
-    local today = date("%m-%d-%Y") -- Match the timestamp format used in RecordAttendance
+    local today = date("%m-%d-%Y") -- Expected format: MM-DD-YYYY
     local newAttendanceDB = {}
     local removedEntries = 0
 
+    -- Iterate through stored attendance records
     for timestamp, entries in pairs(AttendanceDB) do
-        local entryDate = timestamp:match("(%d%d%d%d%-%d%d%-%d%d)")
-        if entryDate == today then
-            newAttendanceDB[timestamp] = entries -- Keep today's entries
+        if timestamp == today then
+            newAttendanceDB[timestamp] = entries -- Keep today's records
         else
-            removedEntries = removedEntries + #entries
+            removedEntries = removedEntries + #entries -- Count removed entries
         end
     end
 
-    -- Update AttendanceDB and save it
-    AttendanceDB = newAttendanceDB
-    C_Timer.After(0, function() ThanksDukaDB.AttendanceDB = AttendanceDB end)
+    -- Apply the cleaned attendance history
+    ThanksDukaDB.attendanceHistory = newAttendanceDB
+    AttendanceDB = newAttendanceDB -- Ensure in-memory reference is updated
 
-    -- Notify user
     if removedEntries > 0 then
-        print("Removed " .. removedEntries .. " old attendance records. Only today's records remain.")
+        print("Removed " .. removedEntries .. " old attendance records. Only today's remain.")
     else
         print("No old attendance records found to remove.")
     end
-
+     
     -- Refresh the attendance window content
     if content3 and content3.editAttendanceBox then
         local attendanceText = "Raid Attendance - " .. today .. "\n"
@@ -380,12 +380,24 @@ local msButton = CreateButton("MS", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 50, A
 local osButton = CreateButton("OS", "BOTTOM", frame, "BOTTOM", 80, 30, 120, 50, AnnounceRoll("OS"))
 local xmogButton = CreateButton("XMog", "BOTTOM", frame, "BOTTOM", 80, 30, -40, 10, AnnounceRoll("XMog"))
 
-local endRollButton = CreateButton("End Roll", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 10, EndRoll)
-
+--local endRollButton = CreateButton("End Roll", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 10, EndRoll)
+local endRollButton = CreateButton("End Roll", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 10, function()
+    EndRoll()
+end)
         -- "Clear History" Button
 local clearButton = CreateButton("Clear History", "BOTTOM", frame, "BOTTOM", 90, 30, 0, 20, ClearOldHistory)
 local attendanceButton = CreateButton("Record Attendance", "BOTTOM", frame, "BOTTOM", 130, 30, -80, 20, RecordAttendance)
 local clearAttendanceButton = CreateButton("Clear Attendance", "BOTTOM", frame, "BOTTOM", 130, 30, 80, 20, ClearOldAttendance)
+
+if not SendAttendanceHistory then
+    function SendAttendanceHistory()
+    end
+end
+
+attendanceButton:HookScript("OnClick", function()
+    SendAttendanceHistory()
+end)
+
 
 
 twoSetButton:Hide()
@@ -516,11 +528,6 @@ local function SetTabs(frame, numTabs, ...)
         tab.content:SetSize(320, 400)
         tab.content:Hide()
 
-        -- For testing purposes
-        --tab.content.bg = tab.content:CreateTexture(nil, "BACKGROUND")
-        --tab.content.bg:SetAllPoints(true)
-        --tab.content.bg:SetColorTexture(math.random(), math.random(), math.random(), 0.6)
-
         if i == 1 then
             tab.content = scrollChild  -- Tab 1 content = scrollChild (loot items)
         elseif i == 2 then
@@ -639,35 +646,6 @@ function AttendanceWindow()
     content3.editAttendanceBox:SetText(attendanceText)
     content3.editAttendanceBox:HighlightText()
 end
-
-
--------------------------------------------------
-
--- Create Dropdown Menu
---[[local difficultyDropdown = CreateFrame("Frame", "ThanksDukaDropdown", frame, "UIDropDownMenuTemplate")
-difficultyDropdown:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -30)
-
-local function OnDifficultySelected(self, arg1, arg2, checked)
-    selectedDifficulty = arg1
-    UIDropDownMenu_SetText(difficultyDropdown, arg1)
-end
-
-local function InitializeDropdown(self, level, menuList)
-    local info = UIDropDownMenu_CreateInfo()
-    info.func = OnDifficultySelected
-    
-    info.text, info.arg1 = "Normal", "Normal"
-    UIDropDownMenu_AddButton(info)
-    
-    info.text, info.arg1 = "Heroic", "Heroic"
-    UIDropDownMenu_AddButton(info)
-end
-
-UIDropDownMenu_Initialize(difficultyDropdown, InitializeDropdown)
-UIDropDownMenu_SetWidth(difficultyDropdown, 100)
-UIDropDownMenu_SetText(difficultyDropdown, "Normal")--]]
-
-
 
 -- Timer Bar
 timerBar = CreateFrame("StatusBar", nil, frame)
