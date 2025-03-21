@@ -73,39 +73,52 @@ function EndRoll()
     end
 
     if #lootItems == 0 then return end
-    local item = lootItems[1]
+
+    local item = lootItems[1]  -- First item in list
+    local itemLink = item.link
     local chatType = IsInRaid() and "RAID" or "SAY"
-    local highestRoll, winner = 0, nil
-    
+
+    -- Sort rolls in descending order
+    local sortedRolls = {}
     for player, roll in pairs(rolls) do
-        if roll > highestRoll then
-            highestRoll = roll
-            winner = player
+        table.insert(sortedRolls, {player = player, roll = roll})
+    end
+    table.sort(sortedRolls, function(a, b) return a.roll > b.roll end)
+
+    -- Distribute items fairly
+    local availableItems = lootItemCounts[itemLink] or 1
+    local awardedCount = 0
+
+    for i, entry in ipairs(sortedRolls) do
+        if awardedCount < availableItems then
+            local winner = entry.player
+            local highestRoll = entry.roll
+
+            if winner then
+                local formattedEntry = string.format("%s, %s, %s, %s, %s", 
+                    winner, date("%m-%d-%Y"), itemLink, GetRaidDifficulty(), frame.currentRollType)
+
+                table.insert(ThanksDukaDB.rollHistory, formattedEntry)
+
+                SendChatMessage(winner .. " won " .. itemLink .. " " .. GetRaidDifficulty() .. 
+                    " for " .. frame.currentRollType .. " with a roll of " .. highestRoll, chatType)
+
+                lootItemCounts[itemLink] = lootItemCounts[itemLink] - 1
+                awardedCount = awardedCount + 1
+
+                -- If all items are awarded, break out
+                if lootItemCounts[itemLink] <= 0 then
+                    break
+                end
+            end
         end
     end
-    
-     local rollTypeText = frame.currentRollType or "Unknown"
-     local itemName = GetItemInfo(item.link) or item.link -- Get plain text
 
-     if winner then
-        local formattedEntry = string.format("%s, %s, %s, %s, %s", 
-            winner, date("%m-%d-%Y"), itemName, GetRaidDifficulty(), rollTypeText)
-        
-        -- Save it to rollHistory
-        table.insert(ThanksDukaDB.rollHistory, formattedEntry)
-        --ThanksDukaDB.rollHistory = ThanksDukaDB.rollHistory  -- Save to database
-
-        SendChatMessage(winner .. " won " .. item.link .. " " .. GetRaidDifficulty() .. " for " .. rollTypeText .. " with a roll of " .. highestRoll .. " on " .. date("%m-%d-%Y"), chatType)
-        SendChatMessage(winner .. " won " .. item.link, "WHISPER", nil, UnitName("player"))
+    -- Remove the item from the UI only when all copies are gone
+    if lootItemCounts[itemLink] <= 0 then
         RemoveLootItem(1)
-    else
-        SendChatMessage("No valid rolls received.", chatType)
     end
-    
-    if rollTimer then
-        rollTimer:Cancel()
-        rollTimer = nil
-    end
+
     timerBar:SetValue(0)
 end
 
@@ -361,8 +374,8 @@ function RecordAttendance()
 end
 
 
-local twoSetButton = CreateButton("2 set", "BOTTOM", frame, "BOTTOM", 80, 30, -120, 50, AnnounceRoll("2 set"))
-local fourSetButton = CreateButton("4 set", "BOTTOM", frame, "BOTTOM", 80, 30, -40, 50, AnnounceRoll("4 set"))
+local twoSetButton = CreateButton("2 Set", "BOTTOM", frame, "BOTTOM", 80, 30, -120, 50, AnnounceRoll("2 Set"))
+local fourSetButton = CreateButton("4 Set", "BOTTOM", frame, "BOTTOM", 80, 30, -40, 50, AnnounceRoll("4 Set"))
 local msButton = CreateButton("MS", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 50, AnnounceRoll("MS"))
 local osButton = CreateButton("OS", "BOTTOM", frame, "BOTTOM", 80, 30, 120, 50, AnnounceRoll("OS"))
 local xmogButton = CreateButton("XMog", "BOTTOM", frame, "BOTTOM", 80, 30, -40, 10, AnnounceRoll("XMog"))
@@ -746,11 +759,11 @@ SlashCmdList["THANKSDUKA"] = function(msg)
 
     if command == "enable" then
         addonEnabled = true
-        print("|cff00ff00ThanksDuka is now enabled.|r")
+        print("ThanksDuka is now |cff00ff00enabled|r.")
     elseif command == "disable" then
         addonEnabled = false
         frame:Hide()
-        print("|cffff0000ThanksDuka is now disabled.|r")
+        print("ThanksDuka is now |cffff0000disabled|r.")
     elseif command == "toggle" then
         ToggleFrame()
     elseif command == "add" and itemLink then
@@ -758,9 +771,9 @@ SlashCmdList["THANKSDUKA"] = function(msg)
     else
         print("|cffff0000Invalid command.|r")
         print("|cffffff00Usage:|r")
-        print("|cff00ff00/thanksduka enable|r - enables the addon if it is not already")
-        print("|cffff0000/thanksduka disable|r - disables the addon if it is not already")
-        print("|cff00ccff/thanksduka toggle|r - toggles the main interface")
-        print("|cffffaa00/thanksduka add|r |cffffffff[item]|r - manually add an item to the loot table")
+        print("/thanksduka |cff00ff00enable|r - enables the addon if it is not already")
+        print("/thanksduka |cffff0000disable|r - disables the addon if it is not already")
+        print("/thanksduka |cff00ccfftoggle|r - toggles the main interface")
+        print("/thanksduka |cffffaa00add|r [item] - manually add an item to the loot table")
     end
 end
