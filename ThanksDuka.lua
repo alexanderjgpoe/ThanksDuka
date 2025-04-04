@@ -556,6 +556,7 @@ local function PlayerDropdown_Initialize(self, level)
         for i = 1, MAX_RAID_MEMBERS do
             local name = GetRaidRosterInfo(i)
             if name then
+                name = name:match("([^%-]+)") -- Remove realm name
                 table.insert(players, name)
             end
         end
@@ -657,17 +658,6 @@ end
 attendanceButton:HookScript("OnClick", function()
     SendAttendanceHistory()
 end)
-
-
-
---twoSetButton:Hide()
---fourSetButton:Hide()
---msButton:Hide()
---osButton:Hide()
---xmogButton:Hide()
---endRollButton:Hide()
-
-
 
 ------------------------------------------------------------------------
 -- Create tabs
@@ -798,23 +788,15 @@ local function SetTabs(frame, numTabs, ...)
         if i == 1 then
             tab.content = scrollChild  -- Tab 1 content = scrollChild (loot items)
         elseif i == 2 then
-            --tab.content = CreateFrame("Frame", nil, frame.scrollChild)
-            --tab.content:SetSize(320, 400)
             tab.content:Hide()
             content2 = tab.content  -- Store reference to Tab 2's content
         elseif i == 3 then
-            --tab.content = CreateFrame("Frame", nil, frame.scrollChild)
-            --tab.content:SetSize(320, 400)
             tab.content:Hide()
             content3 = tab.content
         elseif i == 4 then
-            --tab.content = CreateFrame("Frame", nil, frame.scrollChild)
-            --tab.content:SetSize(320, 400)
             tab.content:Hide()
             content4 = tab.content  -- Store reference to Tab 3's content (Settings)
         else
-            --tab.content = CreateFrame("Frame", nil, frame.scrollChild)
-            --tab.content:SetSize(320, 400)
             tab.content:Hide()
         end
 
@@ -838,28 +820,27 @@ end
 -- Window for copying rollHistory.
 -------------------------------------------------
 
-
-ShowExportWindow = function()
+function ShowExportWindow()
     if not rollHistory or #rollHistory == 0 then
         print("No saved roll history.")
         return
     end
-
+    
     -- Create a frame if it doesn't exist
     if not content2.editBox then
-        local scrollFrame = CreateFrame("ScrollFrame", nil, content2, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetSize(320, 400)
-        scrollFrame:SetPoint("TOP", content2, "TOP", 0, -30)
 
-        local editBox = CreateFrame("EditBox", nil, scrollFrame)
+        local scrollFrame1 = CreateFrame("scrollFrame", nil, content2, "UIPanelScrollFrameTemplate")
+        scrollFrame1:SetSize(320, 380)
+        scrollFrame1:SetPoint("TOP", content2, "TOP", 0, -30)
+
+        local editBox = CreateFrame("EditBox")
         editBox:SetMultiLine(true)
         editBox:SetFontObject("ChatFontNormal")
-        editBox:SetWidth(320)
+        editBox:SetSize(320, 1)
         editBox:SetAutoFocus(false)
         editBox:SetScript("OnEscapePressed", function() editBox:ClearFocus() end)
-        scrollFrame:SetScrollChild(editBox)
+        scrollFrame1:SetScrollChild(editBox)
         content2.editBox = editBox
-
     end
 
     -- Populate the edit box with roll history
@@ -874,6 +855,7 @@ ShowExportWindow = function()
 
     content2.editBox:SetHeight(newHeight)
     content2.editBox:GetParent():SetHeight(newHeight)
+
 end
 
 -------------------------------------------------
@@ -884,6 +866,7 @@ end
 function AttendanceWindow()
     -- Ensure attendance history exists
     ThanksDukaDB.attendanceHistory = ThanksDukaDB.attendanceHistory or {}
+
 
     -- Create the frame if it doesn’t exist
     if not content3.editAttendanceBox then
@@ -897,10 +880,10 @@ function AttendanceWindow()
         editAttendanceBox:SetWidth(320)
         editAttendanceBox:SetAutoFocus(false)
         editAttendanceBox:SetScript("OnEscapePressed", function() editAttendanceBox:ClearFocus() end)
-        scrollFrame2:SetScrollChild(editAttendanceBox)
         content3.editAttendanceBox = editAttendanceBox
+        scrollFrame2:SetScrollChild(editAttendanceBox)
     end
-
+    
     -- Build attendance display text
     local attendanceText = "Raid Attendance\n"
     for entryDate, entries in pairs(ThanksDukaDB.attendanceHistory) do
