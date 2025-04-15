@@ -506,13 +506,13 @@ end
 local function ItemDropdown_Initialize(self, level)
     local items = {}
     
-    if rollHistory and type(rollHistory) == "table" then
-        for i, entry in ipairs(rollHistory) do
+    local history = ThanksDukaDB and ThanksDukaDB.rollHistory or {}
+    if type(history) == "table" then
+        for i, entry in ipairs(history) do
             if type(entry) == "string" then
                 -- Extract values from the roll history entry.
                 local winner, date, itemName, raidDifficulty, rollType = entry:match("^%s*([^,]+)%s*,%s*([^,]+)%s*,%s*([^,]+)%s*,%s*([^,]+)%s*,%s*(.+)%s*$")
                 if itemName then
-                    -- Build a label that shows the current winner and the item.
                     local label = string.format("(%s) %s", winner, itemName)
                     table.insert(items, { index = i, label = label })
                 else
@@ -520,10 +520,10 @@ local function ItemDropdown_Initialize(self, level)
                 end
             end
         end
+
         table.sort(items, function(a, b) return a.label < b.label end)
     end
 
-    -- Ensure dropdown remains empty if no valid items exist.
     if #items == 0 then
         local info = UIDropDownMenu_CreateInfo()
         info.text = "No Items"
@@ -532,18 +532,17 @@ local function ItemDropdown_Initialize(self, level)
         return
     end
 
-    -- Populate the dropdown.
     for _, itemEntry in ipairs(items) do
         local info = UIDropDownMenu_CreateInfo()
         info.text = itemEntry.label
-        info.func = function(self)
+        info.func = function()
             UIDropDownMenu_SetSelectedName(ThanksDuka_ItemDropdown, itemEntry.label)
-            -- Store the selected entry's index instead of the item string.
             ManualAwardFrame.SelectedEntryIndex = itemEntry.index
         end
         UIDropDownMenu_AddButton(info, level)
     end
 end
+
 
 
 
