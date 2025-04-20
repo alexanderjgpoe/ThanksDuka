@@ -1,6 +1,6 @@
 -- ThanksDuka WoW Loot Addon
 local frame = CreateFrame("Frame", "ThanksDukaFrame", UIParent, "BasicFrameTemplateWithInset")
-frame:SetSize(380, 500)
+frame:SetSize(400, 500)
 frame:SetPoint("CENTER")
 frame:Hide()
 frame:RegisterForDrag("LeftButton")
@@ -15,7 +15,7 @@ local addonEnabled = true
 ThanksDukaDB = ThanksDukaDB or {}
 ThanksDukaDB.rollHistory = ThanksDukaDB.rollHistory or {}  -- Store roll history
 ThanksDukaDB.attendanceHistory = ThanksDukaDB.attendanceHistory or {}  -- Store attendance history
-
+local activeRollGlow = nil
 
 frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 frame.title:SetPoint("TOP", frame, "TOP", 0, -5)
@@ -103,11 +103,11 @@ end
 
 -- Create scrollable loot list
 frame.scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
-frame.scrollFrame:SetSize(320, 380)
+frame.scrollFrame:SetSize(345, 380)
 frame.scrollFrame:SetPoint("TOP", frame, "TOP", 0, -30)
 
 local scrollChild = CreateFrame("Frame")
-scrollChild:SetSize(320, 1)
+scrollChild:SetSize(370, 1)
 scrollChild:SetPoint("TOP", frame, "TOP")
 frame.scrollFrame:SetScrollChild(scrollChild)
 
@@ -129,10 +129,18 @@ end
 -- Once the timer has completed or manually stopped, EndRoll updates ThanksDukaDB.rollHistory with loot history.
 -- Data is formatted as: (name), (date mm-dd-yyyy), [item], (raid difficulty), (roll type).
 function EndRoll()
-    if rollTimer then
-        rollTimer:Cancel()
-        rollTimer = nil
+    if not rollTimer then
+        print("No active roll in progress.")
+        return
     end
+    
+    rollTimer:Cancel()
+    rollTimer = nil
+
+    --if rollTimer then
+    --    rollTimer:Cancel()
+    --    rollTimer = nil
+    --end
 
     if #lootItems == 0 then return end
 
@@ -176,12 +184,37 @@ function EndRoll()
         end
     end
 
-    -- Remove the item from the UI only when all copies are gone
-    if lootItemCounts[itemLink] <= 0 then
-        RemoveLootItem(1)
+    if awardedCount > 0 then
+        -- Subtract awarded count from lootItemCounts
+        lootItemCounts[itemLink] = lootItemCounts[itemLink] - awardedCount
+    
+        -- Remove that many items with matching links from lootItems
+        local removed = 0
+        for i = #lootItems, 1, -1 do
+            if lootItems[i].link == itemLink then
+                RemoveLootItem(i)
+                removed = removed + 1
+                if removed == awardedCount then
+                    break
+                end
+            end
+        end
     end
 
+
     timerBar:SetValue(0)
+    -- Re-enable move buttons
+    for _, item in ipairs(lootItems) do
+        if item.moveUpButton then item.moveUpButton:Enable() end
+        if item.moveDownButton then item.moveDownButton:Enable() end
+    end
+
+    -- Hide the glow
+    if activeRollGlow then
+        activeRollGlow.anim:Stop()
+        activeRollGlow:Hide()
+        activeRollGlow = nil
+    end
 end
 
 local function UpdateTimerBar(timeRemaining)
@@ -212,10 +245,46 @@ local function AnnounceRoll(rollType)
         end
 
         frame.currentRollType = rollType
+        rolls = {}
+
+        for _, item in ipairs(lootItems) do
+            if item.moveUpButton then item.moveUpButton:Disable() end
+            if item.moveDownButton then item.moveDownButton:Disable() end
+        end
+        
+        -- Add glow to the item being rolled
+        local rollingItem = lootItems[1]
+        if rollingItem then
+            if not rollingItem.glow then
+                local glow = rollingItem.frame:CreateTexture(nil, "OVERLAY")
+                glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                glow:SetBlendMode("ADD")
+                glow:SetAlpha(0.8)
+                glow:SetSize(80, 80)
+                glow:SetPoint("CENTER", rollingItem.icon, "CENTER", 0, 0)
+            
+                -- Create pulsing animation group
+                local ag = glow:CreateAnimationGroup()
+                ag:SetLooping("BOUNCE")
+            
+                local fade = ag:CreateAnimation("Alpha")
+                fade:SetFromAlpha(0.4)
+                fade:SetToAlpha(0.8)
+                fade:SetDuration(0.6)
+                fade:SetSmoothing("IN_OUT")
+            
+                glow.anim = ag
+                rollingItem.glow = glow
+            end
+            
+            rollingItem.glow:Show()
+            rollingItem.glow.anim:Play()
+            activeRollGlow = rollingItem.glow
+        end
 
         SendChatMessage(rollType .. " roll for " .. item.link .. "! You have " .. countdownTime .. " seconds.", chatType)
 
-        rolls = {}
+
 
 
         rollTimer = C_Timer.NewTicker(1, function()
@@ -343,12 +412,13 @@ local function AddLootItem(itemLink)
     lootItemCounts[itemLink] = (lootItemCounts[itemLink] or 0) + 1
 
     local itemFrame = CreateFrame("Frame", nil, scrollChild)
-    itemFrame:SetSize(360, 40)
+    itemFrame:SetSize(345, 40)
     
     local texture = itemFrame:CreateTexture(nil, "BACKGROUND")
     texture:SetSize(40, 40)
-    texture:SetPoint("LEFT", itemFrame, "LEFT", 0, -30)
+    texture:SetPoint("LEFT", itemFrame, "LEFT", 30, -30)
     texture:SetTexture(itemIcon)
+    itemFrame.icon = texture -- Save a reference for glow positioning
     
     local itemButton = CreateFrame("Button", nil, itemFrame)
     itemButton:SetPoint("LEFT", texture, "RIGHT", 15, 0)
@@ -381,7 +451,7 @@ local function AddLootItem(itemLink)
     -- Remove button next to each item.
     local removeButton = CreateFrame("Button", nil, itemFrame, "GameMenuButtonTemplate")
     removeButton:SetSize(60, 25)
-    removeButton:SetPoint("RIGHT", itemFrame, "RIGHT", -40, -30)
+    removeButton:SetPoint("RIGHT", itemFrame, "RIGHT", -5, -30)
     removeButton:SetText("Remove")
     removeButton:SetScript("OnClick", function()
         for i, item in ipairs(lootItems) do
@@ -392,7 +462,66 @@ local function AddLootItem(itemLink)
         end
     end)
     
-    table.insert(lootItems, { frame = itemFrame, link = itemLink })
+-- Move Up button
+local moveUpButton = CreateFrame("Button", nil, itemFrame, "GameMenuButtonTemplate")
+moveUpButton:SetSize(20, 20)
+moveUpButton:SetPoint("LEFT", itemFrame, "LEFT", 0, -20)
+moveUpButton:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Up")
+moveUpButton:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-ScrollUpButton-Down")
+moveUpButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+local upHighlight = moveUpButton:GetHighlightTexture()
+upHighlight:ClearAllPoints()
+upHighlight:SetAllPoints()
+upHighlight:SetBlendMode("ADD")
+moveUpButton:SetScript("OnClick", function()
+    for i = 1, #lootItems do
+        if lootItems[i].frame == itemFrame and i > 1 then
+            lootItems[i], lootItems[i - 1] = lootItems[i - 1], lootItems[i]
+            UpdateLootPositions()
+            break
+        end
+    end
+end)
+moveUpButton:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(moveUpButton, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Move item up.")
+    GameTooltip:Show()
+end)
+moveUpButton:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+
+    -- Move Down button
+    local moveDownButton = CreateFrame("Button", nil, itemFrame, "GameMenuButtonTemplate")
+    moveDownButton:SetSize(20, 20)
+    moveDownButton:SetPoint("BOTTOM", moveUpButton, "CENTER", 0, -30)
+    moveDownButton:SetNormalTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    moveDownButton:SetPushedTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Down")
+    moveDownButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+    local downHighlight = moveDownButton:GetHighlightTexture()
+    downHighlight:ClearAllPoints()
+    downHighlight:SetAllPoints()
+    downHighlight:SetBlendMode("ADD")
+    moveDownButton:SetScript("OnClick", function()
+        for i = 1, #lootItems do
+            if lootItems[i].frame == itemFrame and i < #lootItems then
+                lootItems[i], lootItems[i + 1] = lootItems[i + 1], lootItems[i]
+                UpdateLootPositions()
+                break
+            end
+        end
+    end)
+    moveDownButton:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(moveDownButton, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Move item down.")
+        GameTooltip:Show()
+    end)
+    moveDownButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    --table.insert(lootItems, { frame = itemFrame, link = itemLink })
+    table.insert(lootItems, { frame = itemFrame, link = itemLink, moveUpButton = moveUpButton, moveDownButton = moveDownButton, icon = texture })
     itemFrame:SetParent(scrollChild)
     UpdateLootPositions()
     frame:Show()
@@ -664,11 +793,32 @@ end)
 local function Tab_OnClick(self) -- What happens when tabs are clicked
     PanelTemplates_SetTab(self:GetParent(), self:GetID()) -- Blizzard API functionality
 
+--[[        -- Hide all tab contents first
+    for i = 1, frame.numTabs do
+        local tabContent = _G[frame:GetName() .. "Tab" .. i].content
+        if tabContent then
+            tabContent:Hide()
+        end
+    end
+        -- Hide loot scroll frame when switching to other tabs
+    if self:GetID() == 1 then
+        frame.scrollFrame:Show()
+        frame.scrollFrame:SetScrollChild(scrollChild)
+        scrollChild:Show()
+    else
+        frame.scrollFrame:Hide()
+    end
+
+    -- Show this tab's content
+    self.content:Show()
+--]]
+
     -- Creates the tab first
     local scrollChild = frame.scrollFrame:GetScrollChild()
     if (scrollChild) then
         scrollChild:Hide()
     end
+
 
     -- Gets the content of the tab
     frame.scrollFrame:SetScrollChild(self.content)
@@ -706,12 +856,15 @@ local function Tab_OnClick(self) -- What happens when tabs are clicked
     end
     if self:GetID() == 4 then
         if not countdownSlider then  -- Ensure it's only created once
-            countdownSlider = CreateFrame("Slider", nil, content4, "OptionsSliderTemplate")
+            countdownSlider = CreateFrame("Slider", "ThanksDuka_CountdownSlider", content4, "OptionsSliderTemplate")
             countdownSlider:SetSize(180, 20)
             countdownSlider:SetPoint("TOPLEFT", content4, "TOPLEFT", 20, -40)
             countdownSlider:SetMinMaxValues(10, 60)
             countdownSlider:SetValueStep(10)
             countdownSlider:SetValue(60)
+
+            _G["ThanksDuka_CountdownSliderLow"]:SetText("10s")
+            _G["ThanksDuka_CountdownSliderHigh"]:SetText("60s")
     
             sliderText = content4:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             sliderText:SetPoint("BOTTOM", countdownSlider, "TOP", 0, 5)
@@ -775,7 +928,7 @@ local function SetTabs(frame, numTabs, ...)
         tab:SetText(select(i, ...)) -- Text on each tab. i is the tab ID and ... is the text
         tab:SetScript("OnClick", Tab_OnClick)
 
-        tab.content = CreateFrame("Frame", nil, scrollFrame)
+        tab.content = CreateFrame("Frame", nil, frame)
         tab.content:SetSize(320, 400)
         tab.content:Hide()
 
