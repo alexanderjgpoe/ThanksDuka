@@ -916,7 +916,8 @@ local function Tab_OnClick(self) -- What happens when tabs are clicked
     clearButton:Hide()
     attendanceButton:Hide()
     clearAttendanceButton:Hide()
-    ManualAwardButton:Hide()  
+    ManualAwardButton:Hide()
+    addItemButton:Hide()  
 
     if self:GetID() == 1 then
         twoSetButton:Show()
@@ -925,6 +926,7 @@ local function Tab_OnClick(self) -- What happens when tabs are clicked
         osButton:Show()
         xmogButton:Show()
         endRollButton:Show()
+        addItemButton:Show()
     end
 
     if self:GetID() == 2 then
