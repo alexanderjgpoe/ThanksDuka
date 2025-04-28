@@ -2,8 +2,11 @@
 ## Title: Thanks Duka
 ## Notes: A simple Loot Council system for Catastrophe.
 ## Author: Xerun
-## Version: 2.1.4a
+## Version: 2.2.0a
 ## SavedVariables: ThanksDukaDB
+
+libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
 ThanksDuka.lua
 ThanksDuka_Sync.lua
