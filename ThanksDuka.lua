@@ -11,6 +11,10 @@ frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
 table.insert(UISpecialFrames, "ThanksDukaFrame")
 
+
+
+local minimapIcon = LibStub("LibDBIcon-1.0")
+
 local addonEnabled = true
 ThanksDukaDB = ThanksDukaDB or {}
 ThanksDukaDB.rollHistory = ThanksDukaDB.rollHistory or {}  -- Store roll history
@@ -527,6 +531,84 @@ end)
     frame:Show()
 end
 
+local function ShowAddItemPopup()
+    if not AddItemPopup then
+        AddItemPopup = CreateFrame("Frame", "ThanksDuka_AddItemPopup", UIParent, "BasicFrameTemplateWithInset")
+        AddItemPopup:SetSize(350, 150)
+        AddItemPopup:SetPoint("CENTER")
+        AddItemPopup:SetMovable(true)
+        AddItemPopup:EnableMouse(true)
+        AddItemPopup:RegisterForDrag("LeftButton")
+        AddItemPopup:SetScript("OnDragStart", AddItemPopup.StartMoving)
+        AddItemPopup:SetScript("OnDragStop", AddItemPopup.StopMovingOrSizing)
+        AddItemPopup:SetFrameStrata("DIALOG")
+        AddItemPopup:Hide()
+
+        table.insert(UISpecialFrames, "ThanksDuka_AddItemPopup") -- Esc closes it
+
+        local title = AddItemPopup:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        title:SetPoint("TOP", AddItemPopup, "TOP", 0, -10)
+        title:SetText("Add Item to Loot List")
+
+        AddItemPopup.editBox = CreateFrame("EditBox", nil, AddItemPopup, "InputBoxTemplate")
+        AddItemPopup.editBox:SetSize(250, 30)
+        AddItemPopup.editBox:SetPoint("TOP", title, "BOTTOM", 0, -20)
+        AddItemPopup.editBox:SetAutoFocus(true)
+        AddItemPopup.editBox:SetScript("OnEscapePressed", function(self)
+            self:ClearFocus()
+        end)
+
+        -- OK Button
+        local okButton = CreateFrame("Button", nil, AddItemPopup, "GameMenuButtonTemplate")
+        okButton:SetSize(80, 30)
+        okButton:SetPoint("BOTTOM", AddItemPopup, "BOTTOM", -50, 10)
+        okButton:SetText("OK")
+        okButton:SetScript("OnClick", function()
+            local itemLink = AddItemPopup.editBox:GetText()
+            if itemLink and itemLink:match("|c.-|Hitem:.-|h|r") then -- Check if it's a valid itemLink
+                AddLootItem(itemLink)
+                AddItemPopup:Hide()
+            else
+                print("Please enter a valid item link.")
+            end
+        end)
+
+        -- Cancel Button
+        local cancelButton = CreateFrame("Button", nil, AddItemPopup, "GameMenuButtonTemplate")
+        cancelButton:SetSize(80, 30)
+        cancelButton:SetPoint("BOTTOM", AddItemPopup, "BOTTOM", 50, 10)
+        cancelButton:SetText("Cancel")
+        cancelButton:SetScript("OnClick", function()
+            AddItemPopup:Hide()
+        end)
+    end
+
+    AddItemPopup.editBox:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Shift-click an item from your inventory.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    
+    AddItemPopup.editBox:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+
+    -- Activate shift-click handling
+    local originalChatEditInsertLink = ChatEdit_InsertLink
+    ChatEdit_InsertLink = function(link)
+        if AddItemPopup and AddItemPopup:IsShown() then
+            AddItemPopup.editBox:SetText(link)
+            AddItemPopup.editBox:HighlightText()
+            return true
+        else
+            return originalChatEditInsertLink(link)
+        end
+    end
+
+    AddItemPopup:Show()
+    AddItemPopup.editBox:SetText("")
+    AddItemPopup.editBox:SetFocus()
+end
 
 
 local function ProcessRoll(player, roll)
@@ -767,6 +849,7 @@ local fourSetButton = CreateButton("4 Set", "BOTTOM", frame, "BOTTOM", 80, 30, -
 local msButton = CreateButton("MS", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 50, AnnounceRoll("MS"))
 local osButton = CreateButton("OS", "BOTTOM", frame, "BOTTOM", 80, 30, 120, 50, AnnounceRoll("OS"))
 local xmogButton = CreateButton("XMog", "BOTTOM", frame, "BOTTOM", 80, 30, -40, 10, AnnounceRoll("XMog"))
+local addItemButton = CreateButton("Add Item", "BOTTOM", frame, "BOTTOM", 80, 20, 140, 15, ShowAddItemPopup)
 
 --local endRollButton = CreateButton("End Roll", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 10, EndRoll)
 local endRollButton = CreateButton("End Roll", "BOTTOM", frame, "BOTTOM", 80, 30, 40, 10, function()
@@ -1069,7 +1152,7 @@ local function ToggleAddon()
     end
 end
 
-local function ToggleFrame()
+local function ThanksDuka_ToggleFrame()
     if not addonEnabled then
         print("ThanksDuka is currently disabled. Use '/thanksduka enable' to enable it.")
         return
@@ -1084,7 +1167,20 @@ end
 -- Passes the contents of each tab.
 local content1, content2, content3, content4 = SetTabs(frame, 4, "Loot", "History", "Attendance", "Settings")
 
-
+local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("ThanksDuka", {
+    type = "data source",
+    text = "ThanksDuka",
+    icon = "Interface\\Icons\\INV_Misc_Coin_01", 
+    OnClick = function(_, button)
+        if button == "LeftButton" then
+            ThanksDuka_ToggleFrame() -- same as /thanksduka toggle
+        end
+    end,
+    OnTooltipShow = function(tooltip)
+        tooltip:AddLine("ThanksDuka")
+        tooltip:AddLine("Left-click to toggle the main window.", 1, 1, 1)
+    end,
+})
 
 frame:RegisterEvent("CHAT_MSG_LOOT")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
@@ -1094,6 +1190,9 @@ frame:SetScript("OnEvent", function(self, event, msg, sender)
         ThanksDukaDB = ThanksDukaDB or {}
         rollHistory = ThanksDukaDB.rollHistory or {}
         AttendanceDB = AttendanceDB or {}
+
+        ThanksDukaDB.minimap = ThanksDukaDB.minimap or {}
+        minimapIcon:Register("ThanksDuka", LDB, ThanksDukaDB.minimap)
     elseif event == "CHAT_MSG_LOOT" then
         if not addonEnabled then return end
         if msg:find("You receive loot:") then  -- Only process if it's YOUR loot
