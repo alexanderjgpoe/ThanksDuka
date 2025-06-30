@@ -31,6 +31,9 @@ local lootItemCounts = {}
 local rollTimer
 local timerBar
 local countdownTime = 60  -- Default value
+-- Designate a Master Looter
+local designatedLooterEnabled = false
+local designatedLooterName = ""
 
 ---------------------------------------------------------------------------------------
 -- Debugging
@@ -176,7 +179,13 @@ function EndRoll()
 
                 SendChatMessage(winner .. " won " .. itemLink .. " " .. GetRaidDifficulty() .. 
                     " for " .. frame.currentRollType .. " with a roll of " .. highestRoll, chatType)
+                    -- Whisper the player running the roll
                     SendChatMessage(winner .. " won " .. itemLink, "WHISPER", nil, UnitName("player"))
+
+                    -- Also whisper the designated looter (if enabled and different)
+                    if designatedLooterEnabled and designatedLooterName ~= "" and designatedLooterName ~= UnitName("player") then
+                        SendChatMessage(winner .. " won " .. itemLink, "WHISPER", nil, designatedLooterName)
+                    end
                 lootItemCounts[itemLink] = lootItemCounts[itemLink] - 1
                 awardedCount = awardedCount + 1
 
@@ -959,33 +968,54 @@ local function Tab_OnClick(self) -- What happens when tabs are clicked
                 countdownTime = math.floor(value + 0.5)
                 sliderText:SetText("Countdown Time: " .. countdownTime .. "s")
             end)
-            -- Checkbox to enable/disable receiving loot history
-        local receiveHistoryCheckbox = CreateFrame("CheckButton", nil, content4, "UICheckButtonTemplate")
-        receiveHistoryCheckbox:SetPoint("TOPLEFT", content4, "TOPLEFT", 20, -80)
-        receiveHistoryCheckbox.text = content4:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        receiveHistoryCheckbox.text:SetPoint("LEFT", receiveHistoryCheckbox, "RIGHT", 5, 0)
-        receiveHistoryCheckbox.text:SetText("Receive Loot History From Others")
-
-        -- Load saved state
-        receiveHistoryCheckbox:SetChecked(ThanksDukaDB.receiveHistory ~= false) -- Default is true
-
-        receiveHistoryCheckbox:SetScript("OnClick", function(self)
-            ThanksDukaDB.receiveHistory = self:GetChecked() -- Save setting
-        end)
-
-        local receiveAttendanceHistoryCheckbox = CreateFrame("CheckButton", nil, content4, "UICheckButtonTemplate")
-        receiveAttendanceHistoryCheckbox:SetPoint("TOPLEFT", content4, "TOPLEFT", 20, -120)
-        receiveAttendanceHistoryCheckbox.text = content4:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        receiveAttendanceHistoryCheckbox.text:SetPoint("LEFT", receiveAttendanceHistoryCheckbox, "RIGHT", 5, 0)
-        receiveAttendanceHistoryCheckbox.text:SetText("Receive Attendance History From Others")
-
-        -- Load saved state
-        receiveAttendanceHistoryCheckbox:SetChecked(AttendanceDB.receiveAttendanceHistory ~= false) -- Default is true
-
-        receiveAttendanceHistoryCheckbox:SetScript("OnClick", function(self)
-            AttendanceDB.receiveAttendanceHistory = self:GetChecked() -- Save setting
-        end)
         end
+
+        -- Checkbox: Enable Designated Looter
+        local enableDesignatedLooterCheckbox = CreateFrame("CheckButton", nil, content4, "UICheckButtonTemplate")
+        enableDesignatedLooterCheckbox:SetPoint("TOPLEFT", content4, "TOPLEFT", 20, -100)
+        enableDesignatedLooterCheckbox.text = content4:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        enableDesignatedLooterCheckbox.text:SetPoint("LEFT", enableDesignatedLooterCheckbox, "RIGHT", 5, 0)
+        enableDesignatedLooterCheckbox.text:SetText("Designate Master Looter")
+        enableDesignatedLooterCheckbox:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Enable Designated Looter", 1, 1, 1)
+            GameTooltip:AddLine("Lets you handle rolls for loot received by the designated Master Looter.", nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+
+        enableDesignatedLooterCheckbox:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        enableDesignatedLooterCheckbox:SetChecked(false)
+
+        -- Label for input box
+        local designatedLooterLabel = content4:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        designatedLooterLabel:SetPoint("TOPLEFT", enableDesignatedLooterCheckbox, "BOTTOMLEFT", 0, -10)
+        designatedLooterLabel:SetText("Master Looter:")
+
+        -- Input box
+        local designatedLooterBox = CreateFrame("EditBox", nil, content4, "InputBoxTemplate")
+        designatedLooterBox:SetSize(200, 20)
+        designatedLooterBox:SetPoint("TOPLEFT", designatedLooterLabel, "BOTTOMLEFT", 0, -5)
+        designatedLooterBox:SetAutoFocus(false)
+        designatedLooterBox:Disable()  -- Start disabled
+
+        designatedLooterBox:SetScript("OnTextChanged", function(self)
+            designatedLooterName = self:GetText()
+        end)
+
+        -- Enable/disable logic
+        enableDesignatedLooterCheckbox:SetScript("OnClick", function(self)
+            designatedLooterEnabled = self:GetChecked()
+
+            if designatedLooterEnabled then
+                designatedLooterBox:Enable()
+            else
+                designatedLooterBox:Disable()
+                designatedLooterName = ""  -- Clear name if disabled
+                designatedLooterBox:SetText("")
+            end
+        end)
     
         countdownSlider:Show()
     else
@@ -1156,7 +1186,7 @@ end
 
 local function ThanksDuka_ToggleFrame()
     if not addonEnabled then
-        print("ThanksDuka is currently disabled. Use '/thanksduka enable' to enable it.")
+        print("ThanksDuka is currently disabled. Use '/thanksduka enable' or right click the mini map button to enable it.")
         return
     end
     if frame:IsShown() then
@@ -1175,15 +1205,29 @@ local LDB = LibStub("LibDataBroker-1.1"):NewDataObject("ThanksDuka", {
     icon = "Interface\\Icons\\INV_Misc_Coin_01", 
     OnClick = function(_, button)
         if button == "LeftButton" then
-            ThanksDuka_ToggleFrame() -- same as /thanksduka toggle
+            ThanksDuka_ToggleFrame()
+        elseif button == "RightButton" then
+            addonEnabled = not addonEnabled
+
+            if addonEnabled then
+                print("ThanksDuka is now |cff00ff00enabled|r.")
+            else
+                print("ThanksDuka is now |cffff0000disabled|r.")
+                frame:Hide()
+            end
         end
     end,
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("ThanksDuka")
         tooltip:AddLine("Left-click to toggle the main window.", 1, 1, 1)
+        tooltip:AddLine("Right-click to enable/disable the addon.", 1, 1, 1)
+        tooltip:AddLine("Status: " .. (addonEnabled and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r"), 1, 1, 1)
     end,
 })
 
+frame:RegisterEvent("CHAT_MSG_RAID")
+frame:RegisterEvent("CHAT_MSG_RAID_WARNING")
+frame:RegisterEvent("CHAT_MSG_PARTY")
 frame:RegisterEvent("CHAT_MSG_LOOT")
 frame:RegisterEvent("CHAT_MSG_SYSTEM")
 frame:RegisterEvent("PLAYER_LOGIN")
@@ -1195,24 +1239,58 @@ frame:SetScript("OnEvent", function(self, event, msg, sender)
 
         ThanksDukaDB.minimap = ThanksDukaDB.minimap or {}
         minimapIcon:Register("ThanksDuka", LDB, ThanksDukaDB.minimap)
+
     elseif event == "CHAT_MSG_LOOT" then
         if not addonEnabled then return end
-        if msg:find("You receive loot:") then  -- Only process if it's YOUR loot
-            local itemLink = msg:match("|c.-|Hitem:.-|h|r")
-            if itemLink then
-                local _, _, itemQuality = GetItemInfo(itemLink)
-                if itemQuality and itemQuality >= 3 then  -- Only track Rare+ items
-                    AddLootItem(itemLink)
-                end
+
+        local itemLink = msg:match("|c.-|Hitem:.-|h|r")
+        if not itemLink then return end
+
+        local selfName = UnitName("player")
+
+        local isSelfLoot = msg:find("You receive loot:")
+
+        local isFromDesignated = false
+        if designatedLooterEnabled and designatedLooterName ~= "" then
+            local looterName = msg:match("^(.-) receives loot:")
+            if looterName and looterName:find(designatedLooterName) then
+                isFromDesignated = true
             end
         end
-    
-    
-    
+
+        if isSelfLoot or isFromDesignated then
+            local _, _, itemQuality = GetItemInfo(itemLink)
+            if itemQuality and itemQuality >= 3 then
+                AddLootItem(itemLink)
+            end
+        end
+
     elseif event == "CHAT_MSG_SYSTEM" then
         if not addonEnabled then return end
         local player, roll = msg:match("(%S+) rolls (%d+) %(1%-100%)")
         if player and roll then ProcessRoll(player, tonumber(roll)) end
+
+    elseif event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_WARNING" or event == "CHAT_MSG_PARTY" then
+        if not addonEnabled then return end
+
+        -- Try to match ThanksDuka roll win announcement
+        local winner, itemLink, difficulty, rollType, roll = msg:match(
+            "^(%S+) won (|c.-|Hitem:.-|h|r) (%a+) for (%a+) with a roll of (%d+)"
+        )
+
+        if winner and itemLink and difficulty and rollType and roll then
+            local formattedEntry = string.format("%s, %s, %s, %s, %s",
+                winner, date("%m-%d-%Y"), itemLink, difficulty, rollType)
+
+            -- Avoid duplicate entries
+            ThanksDukaDB.rollHistory = ThanksDukaDB.rollHistory or {}
+            for _, entry in ipairs(ThanksDukaDB.rollHistory) do
+                if entry == formattedEntry then return end
+            end
+
+            table.insert(ThanksDukaDB.rollHistory, formattedEntry)
+            print("|cffffcc00[ThanksDuka]|r Roll saved from chat announcement.")
+        end
     end
 end)
 
