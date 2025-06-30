@@ -1,8 +1,8 @@
 ## Interface: 110107
 ## Title: Thanks Duka
-## Notes: A simple Loot Council system for Catastrophe.
+## Notes: A simple Master Looter system for Catastrophe-Thrall.
 ## Author: Xerun
-## Version: 2.2.3a
+## Version: 2.3.0a
 ## SavedVariables: ThanksDukaDB
 
 Libs\LibStub\LibStub.lua
